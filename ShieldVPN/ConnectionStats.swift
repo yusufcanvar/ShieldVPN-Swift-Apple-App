@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 class ConnectionStats: ObservableObject {
     @Published var downloadSpeed: Double = 0
