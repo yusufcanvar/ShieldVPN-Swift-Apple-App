@@ -47,6 +47,18 @@ struct ContentView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         
+                        // Test Butonları (Geliştirme için)
+                        if selectedServer != nil {
+                            TestButtonsView(
+                                onTestServer: {
+                                    vpnManager.testServerConnection()
+                                },
+                                onTestIP: {
+                                    testIPChange()
+                                }
+                            )
+                            .padding(.horizontal)
+                        }
                         
                         // Sunucu Listesi
                         VStack(alignment: .leading, spacing: 12) {
@@ -85,7 +97,7 @@ struct ContentView: View {
             } message: {
                 Text(vpnManager.errorMessage ?? "Bilinmeyen bir hata oluştu")
             }
-            .onChange(of: vpnManager.errorMessage) { newValue in
+            .onChange(of: vpnManager.errorMessage) { oldValue, newValue in
                 showError = newValue != nil
             }
         }
@@ -122,6 +134,78 @@ struct ContentView: View {
                 connectionStats.connectedTime += 1
             }
         }
+    }
+    
+    private func testIPChange() {
+        // VPN bağlantısı kurulu mu kontrol et
+        if vpnManager.state == .connected {
+            // VPN bağlıysa, mevcut IP'yi al ve önceki IP ile karşılaştır
+            ServerConnectionTest.getCurrentIP { currentIP in
+                // VPNManager'da saklanan önceki IP'yi kullan
+                // Eğer yoksa, şu anki IP'yi göster
+                if let currentIP = currentIP {
+                    DispatchQueue.main.async {
+                        self.vpnManager.errorMessage = "IP Testi: Mevcut IP: \(currentIP)\n(VPN bağlantısı kurulduktan sonra otomatik test yapılır)"
+                    }
+                }
+            }
+        } else {
+            // VPN bağlı değilse, manuel test yap
+            ServerConnectionTest.getCurrentIP { beforeIP in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    ServerConnectionTest.getCurrentIP { afterIP in
+                        self.vpnManager.testIPChange(beforeIP: beforeIP, afterIP: afterIP)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Test Buttons View
+struct TestButtonsView: View {
+    let onTestServer: () -> Void
+    let onTestIP: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("🧪 Test Araçları")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            HStack(spacing: 12) {
+                Button(action: onTestServer) {
+                    HStack {
+                        Image(systemName: "network")
+                        Text("Sunucu Testi")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.blue.opacity(0.6))
+                    .cornerRadius(8)
+                }
+                
+                Button(action: onTestIP) {
+                    HStack {
+                        Image(systemName: "globe")
+                        Text("IP Testi")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.green.opacity(0.6))
+                    .cornerRadius(8)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 0.2, green: 0.2, blue: 0.3).opacity(0.4))
+        )
     }
 }
 

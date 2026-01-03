@@ -85,5 +85,60 @@ class KeychainHelper {
         
         SecItemDelete(query as CFDictionary)
     }
+    
+    /// Password reference oluştur
+    /// ÖNEMLİ: 20 bytes ise iOS IKEv2 profili geçersiz (invalid) olur
+    /// - Parameters:
+    ///   - password: Kaydedilecek şifre
+    ///   - account: Hesap adı (username)
+    /// - Returns: Password reference (persistent reference) veya nil
+    func savePassword(_ password: String, account: String) -> Data? {
+        guard let passwordData = password.data(using: .utf8) else {
+            return nil
+        }
+        
+        // 1. Sil
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecAttrService as String: service
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+        
+        // 2. Ekle
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecAttrService as String: service,
+            kSecValueData as String: passwordData,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        
+        var result: CFTypeRef?
+        let status = SecItemAdd(addQuery as CFDictionary, &result)
+        
+        if status != errSecSuccess {
+            print("Keychain Add Error:", status)
+            return nil
+        }
+        
+        // 3. Persistent Ref
+        let fetchQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecAttrService as String: service,
+            kSecReturnPersistentRef as String: true
+        ]
+        
+        var persistentRef: CFTypeRef?
+        let fetchStatus = SecItemCopyMatching(fetchQuery as CFDictionary, &persistentRef)
+        
+        if fetchStatus == errSecSuccess {
+            return persistentRef as? Data
+        } else {
+            print("Persistent Ref Error:", fetchStatus)
+            return nil
+        }
+    }
 }
 

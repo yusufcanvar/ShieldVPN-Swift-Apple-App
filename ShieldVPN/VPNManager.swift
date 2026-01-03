@@ -29,51 +29,13 @@ class VPNManager: ObservableObject {
                 let errorCode = nsError.code
                 let errorDomain = nsError.domain
                 
-                print("⚠️ VPN Manager yüklenirken hata:")
-                print("   Description: \(error.localizedDescription)")
-                print("   Code: \(errorCode)")
-                print("   Domain: \(errorDomain)")
-                print("   UserInfo: \(nsError.userInfo)")
-                
-                // IPC failed (Error 5) için özel mesaj
                 if errorCode == 5 && errorDomain == "NEVPNErrorDomain" {
-                    let ipcErrorMsg = """
-                    ⚠️ IPC Failed Hatası (Error 5) - KRİTİK!
-                    
-                    Bu hata VPN capability'sinin düzgün yapılandırılmadığını gösterir.
-                    Bu sorunu çözmeden VPN çalışmaz!
-                    
-                    ÇÖZÜM ADIMLARI:
-                    
-                    1. Xcode'da Projeyi Açın
-                       - ShieldVPN.xcodeproj dosyasını açın
-                    
-                    2. Personal VPN Capability Ekleme
-                       - Sol panelde 'ShieldVPN' projesine tıklayın
-                       - 'Signing & Capabilities' sekmesine gidin
-                       - '+ Capability' butonuna tıklayın
-                       - 'Personal VPN' seçeneğini bulun ve EKLEYİN
-                    
-                    3. Temizleme ve Yeniden Build
-                       - Product → Clean Build Folder (Shift+Cmd+K)
-                       - Xcode'u kapatıp yeniden açın
-                       - Product → Build (Cmd+B)
-                    
-                    4. iPhone'da Uygulamayı Yeniden Yükleme
-                       - iPhone'da uygulamayı TAMAMEN SİLİN
-                       - Xcode'dan yeniden yükleyin (Cmd+R)
-                       - İlk çalıştırmada VPN izni isteğinde 'Allow' butonuna tıklayın
-                    
-                    DETAYLI TALİMATLAR:
-                    IPC_FAILED_COZUM.md dosyasına bakın!
-                    """
-                    
                     DispatchQueue.main.async {
-                        self.errorMessage = ipcErrorMsg
+                        self.errorMessage = "VPN Capability sorunu. Xcode'da 'Personal VPN' ekleyin."
                     }
                 } else {
                     DispatchQueue.main.async {
-                        self.errorMessage = "VPN yüklenemedi: \(error.localizedDescription)"
+                        self.errorMessage = "VPN yüklenemedi"
                     }
                 }
             } else {
@@ -104,39 +66,35 @@ class VPNManager: ObservableObject {
         let manager = NEVPNManager.shared()
         let status = manager.connection.status
         
-        print("🔄 VPN durumu güncellendi: \(status.rawValue)")
+        // Durum kodları: 0=invalid, 1=disconnected, 2=connecting, 3=connected, 4=reasserting, 5=disconnecting
+        let statusNames: [Int: String] = [
+            0: "invalid",
+            1: "disconnected",
+            2: "connecting",
+            3: "connected",
+            4: "reasserting",
+            5: "disconnecting"
+        ]
         
         switch status {
         case .connected:
             state = .connected
             errorMessage = nil
-            print("✅ VPN bağlı")
         case .connecting:
             state = .connecting
-            print("⏳ VPN bağlanıyor...")
         case .disconnecting:
             state = .disconnecting
-            print("⏳ VPN bağlantısı kesiliyor...")
         case .disconnected:
             state = .disconnected
-            // Sadece gerçekten disconnected ise mesaj göster
-            if state == .disconnected && errorMessage == nil {
-                print("❌ VPN bağlı değil")
-            }
         case .invalid:
-            // Invalid durumunu sadece gerçekten invalid ise göster
-            if manager.protocolConfiguration == nil {
-                state = .disconnected
-                print("❌ VPN yapılandırması geçersiz")
-            } else {
-                state = .disconnected
+            state = .disconnected
+            if errorMessage == nil {
+                errorMessage = "VPN yapılandırması geçersiz"
             }
         case .reasserting:
             state = .connecting
-            print("🔄 VPN yeniden bağlanıyor...")
         @unknown default:
             state = .disconnected
-            print("❓ Bilinmeyen VPN durumu: \(status.rawValue)")
         }
     }
     
@@ -169,17 +127,52 @@ class VPNManager: ObservableObject {
         }
     }
     
+    // MARK: - Test Fonksiyonları
+    
+    /// Sunucu bağlantısını test et
+    func testServerConnection() {
+        guard let server = selectedServer else {
+            DispatchQueue.main.async {
+                self.errorMessage = "Lütfen bir sunucu seçin"
+            }
+            return
+        }
+        
+        print("🧪 Sunucu bağlantı testi başlatılıyor...")
+        ServerConnectionTest.runFullTest(server: server) { results in
+            DispatchQueue.main.async {
+                var message = ""
+                if let reachability = results["reachability"] as? [String: Any] {
+                    let success = reachability["success"] as? Bool ?? false
+                    message = success ? "✅ Sunucu erişilebilir" : "❌ Sunucu erişilemiyor"
+                }
+                if let ip = results["currentIP"] as? String {
+                    message += message.isEmpty ? "" : "\n"
+                    message += "IP: \(ip)"
+                }
+                self.errorMessage = message.isEmpty ? "Test tamamlandı" : message
+            }
+        }
+    }
+    
+    /// IP değişikliğini test et (VPN bağlantısı öncesi ve sonrası)
+    func testIPChange(beforeIP: String?, afterIP: String?) {
+        ServerConnectionTest.testIPChange(beforeIP: beforeIP, afterIP: afterIP) { success, message in
+            // Test sonucu sadece başarısızsa göster
+            if !success {
+                DispatchQueue.main.async {
+                    self.errorMessage = "IP Testi: \(message)"
+                }
+            }
+        }
+    }
+    
     // MARK: - IKEv2 VPN Yapılandırması
     
     private func setupIKEv2VPN(server: ServerModel) {
-        print("🔧 IKEv2 VPN yapılandırması başlatılıyor...")
-        print("   Server: \(server.serverAddress)")
-        print("   Remote ID: \(server.remoteIdentifier)")
-        print("   Username: \(server.username)")
-        
         let manager = NEVPNManager.shared()
         
-        // Mevcut yapılandırmayı temizle
+        // Apple'ın resmi tavsiyesi: loadFromPreferences -> protocolConfiguration -> saveToPreferences
         manager.loadFromPreferences { [weak self] error in
             guard let self = self else { return }
             
@@ -188,263 +181,150 @@ class VPNManager: ObservableObject {
                 let errorCode = nsError.code
                 let errorDomain = nsError.domain
                 
-                print("❌ VPN yüklenirken hata:")
-                print("   Description: \(error.localizedDescription)")
-                print("   Code: \(errorCode)")
-                print("   Domain: \(errorDomain)")
-                print("   UserInfo: \(nsError.userInfo)")
-                
-                // IPC failed (Error 5) için özel mesaj
                 if errorCode == 5 && errorDomain == "NEVPNErrorDomain" {
-                    let ipcErrorMsg = """
-                    ⚠️ IPC Failed Hatası (Error 5) - KRİTİK!
-                    
-                    Bu hata VPN capability'sinin düzgün yapılandırılmadığını gösterir.
-                    Bu sorunu çözmeden VPN çalışmaz!
-                    
-                    ÇÖZÜM ADIMLARI:
-                    
-                    1. Xcode'da Projeyi Açın
-                       - ShieldVPN.xcodeproj dosyasını açın
-                    
-                    2. Personal VPN Capability Ekleme
-                       - Sol panelde 'ShieldVPN' projesine tıklayın
-                       - 'Signing & Capabilities' sekmesine gidin
-                       - '+ Capability' butonuna tıklayın
-                       - 'Personal VPN' seçeneğini bulun ve EKLEYİN
-                    
-                    3. Temizleme ve Yeniden Build
-                       - Product → Clean Build Folder (Shift+Cmd+K)
-                       - Xcode'u kapatıp yeniden açın
-                       - Product → Build (Cmd+B)
-                    
-                    4. iPhone'da Uygulamayı Yeniden Yükleme
-                       - iPhone'da uygulamayı TAMAMEN SİLİN
-                       - Xcode'dan yeniden yükleyin (Cmd+R)
-                       - İlk çalıştırmada VPN izni isteğinde 'Allow' butonuna tıklayın
-                    
-                    DETAYLI TALİMATLAR:
-                    IPC_FAILED_COZUM.md dosyasına bakın!
-                    """
-                    
                     DispatchQueue.main.async {
                         self.state = .disconnected
-                        self.errorMessage = ipcErrorMsg
+                        self.errorMessage = "VPN Capability sorunu. Xcode'da 'Personal VPN' ekleyin."
                     }
                 } else {
                     DispatchQueue.main.async {
                         self.state = .disconnected
-                        self.errorMessage = "VPN yüklenemedi: \(error.localizedDescription)"
+                        self.errorMessage = "VPN yüklenemedi"
                     }
                 }
                 return
             }
             
-            // Eski yapılandırmayı temizle
-            manager.removeFromPreferences { [weak self] removeError in
+            // IKEv2 Protokol Yapılandırması oluştur
+            let ikev2Protocol = NEVPNProtocolIKEv2()
+            
+            guard !server.serverAddress.isEmpty else {
+                DispatchQueue.main.async {
+                    self.state = .disconnected
+                    self.errorMessage = "Sunucu adresi boş"
+                }
+                return
+            }
+            
+            guard !server.remoteIdentifier.isEmpty else {
+                DispatchQueue.main.async {
+                    self.state = .disconnected
+                    self.errorMessage = "Remote Identifier boş"
+                }
+                return
+            }
+            
+            ikev2Protocol.serverAddress = server.serverAddress
+            ikev2Protocol.remoteIdentifier = server.remoteIdentifier
+            ikev2Protocol.localIdentifier = server.username
+            ikev2Protocol.username = server.username
+            
+            // Password'i Keychain'e kaydet ve persistent reference al
+            guard let passwordReference = KeychainHelper.shared.savePassword(
+                server.password,
+                account: server.username
+            ) else {
+                DispatchQueue.main.async {
+                    self.state = .disconnected
+                    self.errorMessage = "Şifre Keychain'e kaydedilemedi"
+                }
+                return
+            }
+            
+            // Test: Password Reference boyutunu kontrol et (20 bytes ise invalid olur)
+            print("Password Reference:", passwordReference)
+            print("Password Reference size:", passwordReference.count)
+            
+            if passwordReference.count == 20 {
+                print("⚠️ UYARI: Password Reference 20 bytes - iOS IKEv2 profili geçersiz olabilir!")
+            }
+            
+            ikev2Protocol.passwordReference = passwordReference
+            
+            // IKEv2 Authentication Ayarları - EAP-MSCHAPv2 için
+            ikev2Protocol.authenticationMethod = .none
+            ikev2Protocol.useExtendedAuthentication = true
+            ikev2Protocol.deadPeerDetectionRate = .medium
+            ikev2Protocol.disableMOBIKE = false
+            ikev2Protocol.disconnectOnSleep = false
+            
+            // Security Association Parameters
+            ikev2Protocol.ikeSecurityAssociationParameters.diffieHellmanGroup = .group14
+            ikev2Protocol.ikeSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256
+            ikev2Protocol.ikeSecurityAssociationParameters.integrityAlgorithm = .SHA256
+            ikev2Protocol.ikeSecurityAssociationParameters.lifetimeMinutes = 1440
+            
+            ikev2Protocol.childSecurityAssociationParameters.diffieHellmanGroup = .group14
+            ikev2Protocol.childSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256
+            ikev2Protocol.childSecurityAssociationParameters.integrityAlgorithm = .SHA256
+            ikev2Protocol.childSecurityAssociationParameters.lifetimeMinutes = 1440
+            
+            guard ikev2Protocol.passwordReference != nil else {
+                DispatchQueue.main.async {
+                    self.state = .disconnected
+                    self.errorMessage = "VPN şifresi hazırlanamadı"
+                }
+                return
+            }
+            
+            // protocolConfiguration ayarla
+            manager.protocolConfiguration = ikev2Protocol
+            manager.localizedDescription = "ShieldVPN"
+            manager.isEnabled = true
+            
+            // saveToPreferences
+            manager.saveToPreferences { [weak self] error in
                 guard let self = self else { return }
                 
-                if let removeError = removeError {
-                    print("⚠️ Eski VPN temizlenirken hata (devam ediliyor): \(removeError.localizedDescription)")
-                }
-                
-                // IKEv2 Protokol Yapılandırması
-                let ikev2Protocol = NEVPNProtocolIKEv2()
-                ikev2Protocol.serverAddress = server.serverAddress
-                ikev2Protocol.remoteIdentifier = server.remoteIdentifier
-                ikev2Protocol.localIdentifier = nil  // Local ID boş (sunucu gereksinimine göre)
-                ikev2Protocol.username = server.username
-                
-                // Password'i hazırla - Keychain'e kaydetmeden önce Data olarak hazırla
-                guard let passwordData = server.password.data(using: .utf8) else {
-                    print("❌ Password Data'ya çevrilemedi!")
+                if let error = error {
+                    let nsError = error as NSError
+                    var errorMsg = "VPN kaydedilemedi"
+                    if nsError.code == 5 && nsError.domain == "NEVPNErrorDomain" {
+                        errorMsg = "VPN Capability sorunu. Xcode'da 'Personal VPN' ekleyin."
+                    }
+                    
                     DispatchQueue.main.async {
                         self.state = .disconnected
-                        self.errorMessage = "Şifre hazırlanamadı"
+                        self.errorMessage = errorMsg
                     }
                     return
                 }
                 
-                // Keychain'e kaydet (VPN için) - iOS'un authorization pop-up'ını önlemek için
-                let passwordKey = "\(server.serverAddress)_\(server.username)_password"
-                
-                // Eski kaydı temizle
-                KeychainHelper.shared.delete(key: passwordKey)
-                
-                // Keychain'e kaydet
-                let passwordSaved = KeychainHelper.shared.save(key: passwordKey, value: server.password)
-                
-                // Password reference'ı ayarla - iOS'un Keychain'den okuyabilmesi için
-                // ÖNEMLİ: Password reference'ı direkt Data olarak kullanmak yerine,
-                // iOS'un VPN yapılandırmasını kaydederken Keychain'den okuyabilmesi için
-                // password reference'ı doğru şekilde ayarlamalıyız
-                if passwordSaved {
-                    // Keychain'den password'ü al
-                    if let keychainPasswordData = KeychainHelper.shared.load(key: passwordKey) {
-                        ikev2Protocol.passwordReference = keychainPasswordData
-                        print("✅ Password Keychain'den okundu ve VPN'e atandı (\(keychainPasswordData.count) bytes)")
-                    } else {
-                        // Keychain'den okunamazsa direkt password data kullan
-                        ikev2Protocol.passwordReference = passwordData
-                        print("⚠️ Keychain'den okunamadı, direkt password data kullanılıyor")
-                    }
-                } else {
-                    // Keychain'e kaydedilemezse direkt password data kullan
-                    ikev2Protocol.passwordReference = passwordData
-                    print("⚠️ Keychain'e kaydedilemedi, direkt password data kullanılıyor")
-                }
-                
-                // IKEv2 Ayarları - Otomatik giriş için optimize edilmiş
-                ikev2Protocol.useExtendedAuthentication = true  // EAP için gerekli
-                ikev2Protocol.authenticationMethod = .none  // EAP (MSCHAPv2) için
-                ikev2Protocol.deadPeerDetectionRate = .high
-                ikev2Protocol.disableMOBIKE = false
-                ikev2Protocol.disconnectOnSleep = false
-                
-                // DNS Ayarları (IKEv2 için DNS genellikle sunucudan gelir, ancak manuel ayarlanabilir)
-                // Not: IKEv2 protokolünde DNS ayarları direkt property olarak yok
-                // DNS ayarları VPN bağlantısı kurulduktan sonra sunucudan gelir veya Network Extension ile ayarlanır
-                
-                // IKE Security Association Parameters (AES256 / SHA256 / DH14)
-                ikev2Protocol.ikeSecurityAssociationParameters.diffieHellmanGroup = .group14  // DH14
-                ikev2Protocol.ikeSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256  // AES256
-                ikev2Protocol.ikeSecurityAssociationParameters.integrityAlgorithm = .SHA256  // SHA256
-                ikev2Protocol.ikeSecurityAssociationParameters.lifetimeMinutes = 1440
-                
-                // Child Security Association Parameters (AES256 / SHA256 / DH14)
-                ikev2Protocol.childSecurityAssociationParameters.diffieHellmanGroup = .group14  // DH14
-                ikev2Protocol.childSecurityAssociationParameters.encryptionAlgorithm = .algorithmAES256  // AES256
-                ikev2Protocol.childSecurityAssociationParameters.integrityAlgorithm = .SHA256  // SHA256
-                ikev2Protocol.childSecurityAssociationParameters.lifetimeMinutes = 1440
-                
-                // Password reference kontrolü
-                guard ikev2Protocol.passwordReference != nil else {
-                    print("❌ Password reference nil!")
-                    DispatchQueue.main.async {
-                        self.state = .disconnected
-                        self.errorMessage = "VPN şifresi hazırlanamadı"
-                    }
-                    return
-                }
-                
-                print("✅ Password reference hazır: \(ikev2Protocol.passwordReference!.count) bytes")
-                
-                print("📡 IKEv2 protokolü yapılandırıldı")
-                print("   Server: \(ikev2Protocol.serverAddress ?? "nil")")
-                print("   Remote ID: \(ikev2Protocol.remoteIdentifier ?? "nil")")
-                print("   Local ID: \(ikev2Protocol.localIdentifier ?? "nil (boş)")")
-                print("   Username: \(ikev2Protocol.username ?? "nil")")
-                print("   DNS: 8.8.8.8, 8.8.4.4 (sunucudan gelecek)")
-                print("   UseExtendedAuth: \(ikev2Protocol.useExtendedAuthentication)")
-                print("   AuthMethod: \(ikev2Protocol.authenticationMethod.rawValue) (EAP-MSCHAPv2)")
-                print("   DeadPeerDetectionRate: \(ikev2Protocol.deadPeerDetectionRate.rawValue)")
-                print("   IKE Encryption: AES256 / SHA256 / DH14")
-                print("   Child SA: AES256 / SHA256 / DH14")
-                
-                // VPN Manager Yapılandırması
-                manager.protocolConfiguration = ikev2Protocol
-                manager.localizedDescription = "ShieldVPN"
-                manager.isEnabled = true
-                
-                print("💾 VPN yapılandırması kaydediliyor...")
-                print("   Password reference: \(ikev2Protocol.passwordReference != nil ? "Var (\(ikev2Protocol.passwordReference!.count) bytes)" : "nil")")
-                
-                // iOS'un Keychain'i hazırlaması ve authorization pop-up'ını önlemek için kısa bir gecikme
-                // ÖNEMLİ: Password reference ayarlandıktan sonra iOS'un Keychain'i hazırlaması için bekleme
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                // Yapılandırmayı tekrar yükle (iOS için önemli)
+                manager.loadFromPreferences { [weak self] loadError in
                     guard let self = self else { return }
                     
-                    // Password reference'ı tekrar kontrol et ve gerekirse güncelle
-                    // iOS'un VPN yapılandırmasını kaydederken Keychain'den okuyabilmesi için
-                    if let keychainPasswordData = KeychainHelper.shared.load(key: passwordKey) {
-                        ikev2Protocol.passwordReference = keychainPasswordData
-                        print("✅ Password reference güncellendi (\(keychainPasswordData.count) bytes)")
+                    guard let _ = manager.protocolConfiguration as? NEVPNProtocolIKEv2 else {
+                        DispatchQueue.main.async {
+                            self.state = .disconnected
+                            self.errorMessage = "VPN yapılandırması geçersiz"
+                        }
+                        return
                     }
                     
-                    // VPN Manager yapılandırmasını güncelle (password reference değişmiş olabilir)
-                    manager.protocolConfiguration = ikev2Protocol
+                    // Invalid durumda başlatma yapma
+                    if manager.connection.status == .invalid {
+                        DispatchQueue.main.async {
+                            self.state = .disconnected
+                            self.errorMessage = "VPN yapılandırması geçersiz. Sunucu erişilebilirliğini kontrol edin."
+                        }
+                        return
+                    }
                     
-                    // Yapılandırmayı kaydet
-                    manager.saveToPreferences { [weak self] error in
-                        guard let self = self else { return }
-                        
-                        if let error = error {
-                            let nsError = error as NSError
-                            print("❌ VPN kaydedilirken hata:")
-                            print("   Description: \(error.localizedDescription)")
-                            print("   Code: \(nsError.code)")
-                            print("   Domain: \(nsError.domain)")
-                            
-                            DispatchQueue.main.async {
-                                self.state = .disconnected
-                                self.errorMessage = "VPN kaydedilemedi: \(error.localizedDescription)"
-                            }
-                            return
+                    // VPN tünelini başlat
+                    do {
+                        try manager.connection.startVPNTunnel()
+                        self.vpnManager = manager
+                    } catch {
+                        let nsError = error as NSError
+                        var errorMsg = "VPN bağlantısı kurulamadı"
+                        if nsError.code == 1 {
+                            errorMsg = "Sunucuya bağlanılamıyor. Sunucu erişilebilirliğini kontrol edin."
                         }
                         
-                        print("✅ VPN yapılandırması kaydedildi")
-                        print("🔄 VPN yapılandırması yeniden yükleniyor...")
-                        
-                        // Yapılandırmayı tekrar yükle (iOS için önemli)
-                        manager.loadFromPreferences { [weak self] loadError in
-                            guard let self = self else { return }
-                            
-                            if let loadError = loadError {
-                                print("⚠️ VPN yeniden yüklenirken hata (devam ediliyor): \(loadError.localizedDescription)")
-                            }
-                            
-                            // VPN tünelini başlat
-                            do {
-                                print("🚀 VPN tüneli başlatılıyor...")
-                                print("   Connection status: \(manager.connection.status.rawValue)")
-                                
-                                try manager.connection.startVPNTunnel()
-                                self.vpnManager = manager
-                                print("✅ VPN tüneli başlatıldı")
-                                print("   Yeni connection status: \(manager.connection.status.rawValue)")
-                            } catch {
-                                let nsError = error as NSError
-                                print("❌ VPN başlatılırken hata:")
-                                print("   Description: \(error.localizedDescription)")
-                                print("   Code: \(nsError.code)")
-                                print("   Domain: \(nsError.domain)")
-                                print("   UserInfo: \(nsError.userInfo)")
-                                print("   Connection status: \(manager.connection.status.rawValue)")
-                                
-                                var errorMsg = "VPN başlatılamadı: \(error.localizedDescription)"
-                                
-                                // Error 1 için özel mesaj
-                                if nsError.code == 1 {
-                                    errorMsg = """
-                                    ⚠️ VPN Bağlantı Hatası (Error 1)
-                                    
-                                    Bu hata genellikle şu nedenlerden kaynaklanır:
-                                    
-                                    1. 🌐 Sunucu erişilebilir değil
-                                       - Sunucu adresini kontrol edin: \(server.serverAddress)
-                                       - İnternet bağlantınızı kontrol edin
-                                       - UDP 500 ve 4500 portlarının açık olduğundan emin olun
-                                    
-                                    2. 🔐 Kimlik doğrulama sorunu
-                                       - Kullanıcı adı ve şifre doğru mu?
-                                       - EAP (MSCHAPv2) sunucuda aktif mi?
-                                    
-                                    3. ⚙️ VPN yapılandırması
-                                       - Xcode'da 'Personal VPN' capability eklendi mi?
-                                       - Entitlements dosyası doğru mu?
-                                    
-                                    ÇÖZÜM:
-                                    - Sunucuya ping atarak erişilebilirliği test edin
-                                    - Sunucu loglarını kontrol edin
-                                    - VPN yapılandırmasını kontrol edin
-                                    """
-                                }
-                                
-                                DispatchQueue.main.async {
-            self.state = .disconnected
-                                    self.errorMessage = errorMsg
-                                }
-                            }
+                        DispatchQueue.main.async {
+                            self.state = .disconnected
+                            self.errorMessage = errorMsg
                         }
                     }
                 }

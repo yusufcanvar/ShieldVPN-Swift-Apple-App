@@ -16,20 +16,23 @@
 		C3FB74672D1D91D000D24E85 /* ServerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FB74662D1D91D000D24E85 /* ServerModel.swift */; };
 		C3FB74692D1D91D000D24E85 /* ConnectionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FB74682D1D91D000D24E85 /* ConnectionStats.swift */; };
 		C3FB746A2D1D91D000D24E85 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FB746B2D1D91D000D24E85 /* KeychainHelper.swift */; };
+		C3FB746E2D1D91D000D24E85 /* ServerConnectionTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FB746D2D1D91D000D24E85 /* ServerConnectionTest.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C34387632EEA1DCA00CE1625 /* ShieldVPNDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShieldVPNDebug.entitlements; sourceTree = "<group>"; };
 		C3FB74512D1D91D000D24E85 /* ShieldVPN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShieldVPN.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C3FB745C2D1D91D000D24E85 /* ShieldVPNApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldVPNApp.swift; sourceTree = "<group>"; };
 		C3FB74552D1D91D000D24E85 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C3FB74572D1D91D000D24E85 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C3FB745A2D1D91D000D24E85 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		C3FB745C2D1D91D000D24E85 /* ShieldVPNApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldVPNApp.swift; sourceTree = "<group>"; };
 		C3FB74622D1D91D000D24E85 /* VPNManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNManager.swift; sourceTree = "<group>"; };
 		C3FB74642D1D91D000D24E85 /* VPNGateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VPNGateService.swift; sourceTree = "<group>"; };
 		C3FB74662D1D91D000D24E85 /* ServerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerModel.swift; sourceTree = "<group>"; };
 		C3FB74682D1D91D000D24E85 /* ConnectionStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStats.swift; sourceTree = "<group>"; };
 		C3FB746B2D1D91D000D24E85 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		C3FB746C2D1D91D000D24E85 /* ShieldVPN.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShieldVPN.entitlements; sourceTree = "<group>"; };
+		C3FB746D2D1D91D000D24E85 /* ServerConnectionTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConnectionTest.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +65,7 @@
 		C3FB74532D1D91D000D24E85 /* ShieldVPN */ = {
 			isa = PBXGroup;
 			children = (
+				C34387632EEA1DCA00CE1625 /* ShieldVPNDebug.entitlements */,
 				C3FB745C2D1D91D000D24E85 /* ShieldVPNApp.swift */,
 				C3FB74552D1D91D000D24E85 /* ContentView.swift */,
 				C3FB74622D1D91D000D24E85 /* VPNManager.swift */,
@@ -69,6 +73,7 @@
 				C3FB74662D1D91D000D24E85 /* ServerModel.swift */,
 				C3FB74682D1D91D000D24E85 /* ConnectionStats.swift */,
 				C3FB746B2D1D91D000D24E85 /* KeychainHelper.swift */,
+				C3FB746D2D1D91D000D24E85 /* ServerConnectionTest.swift */,
 				C3FB746C2D1D91D000D24E85 /* ShieldVPN.entitlements */,
 				C3FB74572D1D91D000D24E85 /* Assets.xcassets */,
 				C3FB74592D1D91D000D24E85 /* Preview Content */,
@@ -161,6 +166,7 @@
 				C3FB74672D1D91D000D24E85 /* ServerModel.swift in Sources */,
 				C3FB74692D1D91D000D24E85 /* ConnectionStats.swift in Sources */,
 				C3FB746A2D1D91D000D24E85 /* KeychainHelper.swift in Sources */,
+				C3FB746E2D1D91D000D24E85 /* ServerConnectionTest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -291,7 +297,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = ShieldVPN/ShieldVPN.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ShieldVPN/ShieldVPNDebug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ShieldVPN/Preview Content\"";
